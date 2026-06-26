@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>WA Scheme Editor</title>
+		<style>
+		body { font-family: Arial, sans-serif; margin: 16px; }
+		button, input[type=text] { font: 14px sans-serif; }
+		table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+		th, td { border: 1px solid #ccc; padding: 6px 8px; }
+		th { background: #f2f2f2; }
+		input[type=text] { width: 100%; box-sizing: border-box; }
+		#game-options table { width: 100%; max-width: 800px; }
+		#message { margin-top: 12px; min-height: 20px; }
+		.super-weapons-hidden { display: none; }
+		</style>
+		<script>
+		const optionDefinitions = [
+			{ offset: 0x05, key: 'hotSeatDelay', label: 'Hot-Seat Delay', type: 'uint8' },
+			{ offset: 0x06, key: 'retreatTime', label: 'Retreat Time', type: 'uint8' },
+			{ offset: 0x07, key: 'ropeRetreatTime', label: 'Rope Retreat Time', type: 'uint8' },
+			{ offset: 0x08, key: 'displayTotalRoundTime', label: 'Display Total Round Time', type: 'bool' },
+			{ offset: 0x09, key: 'automaticReplays', label: 'Automatic Replays', type: 'bool' },
+			{ offset: 0x0A, key: 'fallDamage', label: 'Fall Damage', type: 'uint8' },
+			{ offset: 0x0B, key: 'artilleryMode', label: 'Artillery Mode', type: 'bool' },
+			{ offset: 0x0C, key: 'bountyMode', label: 'Bounty Mode', type: 'bool' },
+			{ offset: 0x0D, key: 'stockpilingMode', label: 'Stockpiling Mode', type: 'uint8' },
+			{ offset: 0x0E, key: 'wormSelect', label: 'Worm Select', type: 'uint8' },
+			{ offset: 0x0F, key: 'suddenDeathEvent', label: 'Sudden Death Event', type: 'uint8' },
+			{ offset: 0x10, key: 'waterRiseRate', label: 'Water Rise Rate', type: 'uint8' },
+			{ offset: 0x11, key: 'weaponCrateProbability', label: 'Weapon Crate Probability', type: 'sint8' },
+			{ offset: 0x12, key: 'donorCards', label: 'Donor Cards', type: 'bool' },
+			{ offset: 0x13, key: 'healthCrateProbability', label: 'Health Crate Probability', type: 'sint8' },
+			{ offset: 0x14, key: 'healthCrateEnergy', label: 'Health Crate Energy', type: 'uint8' },
+			{ offset: 0x15, key: 'utilityCrateProbability', label: 'Utility Crate Probability', type: 'sint8' },
+			{ offset: 0x16, key: 'hazardousObjectTypes', label: 'Hazardous Object Types', type: 'uint8' },
+			{ offset: 0x17, key: 'mineDelay', label: 'Mine Delay', type: 'sint8' },
+			{ offset: 0x18, key: 'dudMines', label: 'Dud Mines', type: 'bool' },
+			{ offset: 0x19, key: 'manualWormPlacement', label: 'Manual Worm Placement', type: 'bool' },
+			{ offset: 0x1A, key: 'initialWormEnergy', label: 'Initial Worm Energy', type: 'uint8' },
+			{ offset: 0x1B, key: 'turnTime', label: 'Turn Time', type: 'sint8' },
+			{ offset: 0x1C, key: 'roundTime', label: 'Round Time', type: 'sint8' },
+			{ offset: 0x1D, key: 'numberOfWins', label: 'Number of Wins', type: 'uint8' },
+			{ offset: 0x1E, key: 'blood', label: 'Blood', type: 'bool' },
+			{ offset: 0x1F, key: 'aquaSheep', label: 'Aqua Sheep', type: 'bool' },
+			{ offset: 0x20, key: 'sheepHeaven', label: 'Sheep Heaven', type: 'bool' },
+			{ offset: 0x21, key: 'godWorms', label: 'God Worms', type: 'bool' },
+			{ offset: 0x22, key: 'indestructibleLand', label: 'Indestructible Land', type: 'bool' },
+			{ offset: 0x23, key: 'upgradedGrenade', label: 'Upgraded Grenade', type: 'bool' },
+			{ offset: 0x24, key: 'upgradedShotgun', label: 'Upgraded Shotgun', type: 'bool' },
+			{ offset: 0x25, key: 'upgradedClusters', label: 'Upgraded Clusters', type: 'bool' },
+			{ offset: 0x26, key: 'upgradedLongbow', label: 'Upgraded Longbow', type: 'bool' },
+			{ offset: 0x27, key: 'teamWeapons', label: 'Team Weapons', type: 'bool' },
+			{ offset: 0x28, key: 'superWeapons', label: 'Super Weapons', type: 'bool' }
+		];
+		const weaponNames = [
+			'Bazooka','Homing Missile','Mortar','Grenade','Cluster Bomb','Skunk','Petrol Bomb','Banana Bomb','Handgun','Shotgun',
+			'Uzi','Minigun','Longbow','Airstrike','Napalm Strike','Mine','Fire Punch','Dragon Ball','Kamikaze','Prod',
+			'Battle Axe','Blowtorch','Pneumatic Drill','Girder','Ninja Rope','Parachute','Bungee','Teleport','Dynamite','Sheep',
+			'Baseball Bat','Flame Thrower','Homing Pigeon','Mad Cow','Holy Hand Grenade','Old Woman','Sheep Launcher','Super Sheep','Mole Bomb','Jet Pack',
+			'Low Gravity','Laser Sight','Fast Walk','Invisibility','Damage x2'
+		];
+		const superWeaponNames = [
+			'Freeze','Super Banana Bomb','Mine Strike','Girder Starter Pack','Earthquake','Scales Of Justice','Ming Vase','Mike\'s Carpet Bomb',
+			'Patsy\'s Magic Bullet','Indian Nuclear Test','Select Worm','Salvation Army','Mole Squadron','MB Bomb','Concrete Donkey','Suicide Bomber',
+			'Sheep Strike','Mail Strike','Armageddon'
+		];
+
+		let currentScheme = { version: 1, options: {}, weapons: [], superWeapons: [] };
+
+		document.addEventListener('DOMContentLoaded', init);
+
+		function init() {
+			document.getElementById('input-file').addEventListener('change', onFileChange);
+			document.getElementById('save').addEventListener('click', onSave);
+			renderForm();
+		}
+
+		function showMessage(text, isError = true) {
+			const el = document.getElementById('message');
+			el.textContent = text || '';
+			el.style.color = isError ? '#b00' : '#080';
+		}
+
+		function readFile(file) {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result);
+				reader.onerror = () => reject(reader.error);
+				reader.readAsArrayBuffer(file);
+			});
+		}
+
+		function onFileChange(event) {
+			const file = event.target.files[0];
+			if (!file) return;
+			readFile(file).then(parseScheme).then(scheme => {
+				currentScheme = scheme;
+				renderForm();
+				setFormValues();
+				document.getElementById('save').disabled = false;
+				showMessage(`Loaded version ${scheme.version} scheme.`, false);
+			}).catch(error => {
+				showMessage(error.toString());
+			});
+		}
+
+		function parseScheme(arrayBuffer) {
+			const data = new DataView(arrayBuffer);
+			if (data.byteLength < 221) throw new Error('File is too short to be a valid scheme.');
+			const sig = String.fromCharCode(data.getUint8(0), data.getUint8(1), data.getUint8(2), data.getUint8(3));
+			if (sig !== 'SCHM') throw new Error('Invalid scheme signature.');
+			const version = data.getUint8(4);
+			if (version !== 1 && version !== 2) throw new Error('Unsupported scheme version: ' + version);
+			const options = {};
+			optionDefinitions.forEach(def => {
+				options[def.key] = def.type === 'sint8' ? data.getInt8(def.offset) : data.getUint8(def.offset);
+			});
+			const weapons = weaponNames.map((name, index) => {
+				const offset = 0x29 + index * 4;
+				return {
+					name,
+					ammunition: data.getUint8(offset),
+					power: data.getUint8(offset + 1),
+					delay: data.getUint8(offset + 2),
+					probability: data.getUint8(offset + 3)
+				};
+			});
+			const superWeapons = [];
+			if (version === 2) {
+				if (data.byteLength < 297) throw new Error('Version 2 scheme is incomplete or too short.');
+				superWeaponNames.forEach((name, index) => {
+					const offset = 0xDD + index * 4;
+					superWeapons.push({
+						name,
+						ammunition: data.getUint8(offset),
+						power: data.getUint8(offset + 1),
+						delay: data.getUint8(offset + 2),
+						probability: data.getUint8(offset + 3)
+					});
+				});
+			}
+			return { version, options, weapons, superWeapons };
+		}
+
+		function renderForm() {
+			const container = document.getElementById('game-options');
+			const rows = [`<tr><th style="width: 220px;">Scheme Version</th><td><input type="text" id="scheme-version" value="${currentScheme.version}" /></td></tr>`];
+			optionDefinitions.forEach(def => {
+				rows.push(`<tr><th>${def.label}</th><td><input type="text" id="option-${def.key}" /></td></tr>`);
+			});
+			container.innerHTML = `<table>${rows.join('')}</table>`;
+			document.getElementById('scheme-version').addEventListener('change', onVersionChange);
+			renderWeaponTable();
+			renderSuperWeaponTable();
+		}
+
+		function renderWeaponTable() {
+			const tbody = document.querySelector('#weapon-options tbody');
+			if (!tbody) return;
+			const rows = weaponNames.map((name, index) => `
+				<tr data-weapon-index="${index}">
+					<td>${name}</td>
+					<td><input type="text" id="weapon-${index}-ammunition" /></td>
+					<td><input type="text" id="weapon-${index}-power" /></td>
+					<td><input type="text" id="weapon-${index}-delay" /></td>
+					<td><input type="text" id="weapon-${index}-probability" /></td>
+				</tr>`).join('');
+			tbody.innerHTML = rows;
+		}
+
+		function renderSuperWeaponTable() {
+			const tbody = document.querySelector('#super-weapon-options tbody');
+			if (!tbody) return;
+			const superRows = superWeaponNames.map((name, index) => {
+				const rowIndex = 45 + index;
+				return `
+				<tr class="super-weapon" data-weapon-index="${rowIndex}">
+					<td>${name}</td>
+					<td><input type="text" id="weapon-${rowIndex}-ammunition" /></td>
+					<td><input type="text" id="weapon-${rowIndex}-power" /></td>
+					<td><input type="text" id="weapon-${rowIndex}-delay" /></td>
+					<td><input type="text" id="weapon-${rowIndex}-probability" /></td>
+				</tr>`;
+			}).join('');
+			tbody.innerHTML = superRows;
+			updateSuperWeaponVisibility();
+		}
+
+		function setFormValues() {
+			document.getElementById('scheme-version').value = currentScheme.version;
+			optionDefinitions.forEach(def => {
+				const input = document.getElementById(`option-${def.key}`);
+				if (input) input.value = currentScheme.options[def.key] !== undefined ? String(currentScheme.options[def.key]) : '';
+			});
+			currentScheme.weapons.forEach((weapon, index) => setWeaponRowValues(index, weapon));
+			currentScheme.superWeapons.forEach((weapon, index) => setWeaponRowValues(45 + index, weapon));
+			updateSuperWeaponVisibility();
+		}
+
+		function setWeaponRowValues(index, weapon) {
+			['ammunition','power','delay','probability'].forEach(field => {
+				const input = document.getElementById(`weapon-${index}-${field}`);
+				if (input) input.value = String(weapon[field]);
+			});
+		}
+
+		function onVersionChange() {
+			const versionInput = document.getElementById('scheme-version');
+			const version = parseInt(versionInput.value, 10);
+			if (version !== 1 && version !== 2) {
+				showMessage('Version must be 1 or 2.');
+				return;
+			}
+			currentScheme.version = version;
+			updateSuperWeaponVisibility();
+			showMessage('', false);
+		}
+
+		function updateSuperWeaponVisibility() {
+			const show = currentScheme.version === 2;
+			const el = document.getElementById('super-weapon-options');
+			if (show) {
+				el.classList.remove('super-weapons-hidden');
+			} else {
+				el.classList.add('super-weapons-hidden');
+			}
+		}
+
+		function onSave() {
+			try {
+				const buffer = buildSchemeBuffer();
+				const name = `scheme-v${currentScheme.version}.wsc`;
+				downloadBuffer(buffer, name);
+				showMessage('Scheme saved successfully.', false);
+			} catch (error) {
+				showMessage(error.toString());
+			}
+		}
+
+		function buildSchemeBuffer() {
+			const version = parseInt(document.getElementById('scheme-version').value, 10);
+			if (version !== 1 && version !== 2) throw new Error('Version must be 1 or 2.');
+			const length = version === 2 ? 297 : 221;
+			const buffer = new ArrayBuffer(length);
+			const data = new DataView(buffer);
+			data.setUint8(0, 0x53);
+			data.setUint8(1, 0x43);
+			data.setUint8(2, 0x48);
+			data.setUint8(3, 0x4D);
+			data.setUint8(4, version);
+			optionDefinitions.forEach(def => {
+				const input = document.getElementById(`option-${def.key}`);
+				let value = input ? parseInt(input.value, 10) : 0;
+				if (Number.isNaN(value)) value = 0;
+				if (def.type === 'bool') value = value === 1 ? 1 : 0;
+				if (def.type === 'sint8') data.setInt8(def.offset, value);
+				else data.setUint8(def.offset, value & 0xFF);
+			});
+			weaponNames.forEach((name, index) => writeWeaponRow(data, index, 0x29 + index * 4));
+			if (version === 2) {
+				superWeaponNames.forEach((name, index) => writeWeaponRow(data, 45 + index, 0xDD + index * 4));
+			}
+			return buffer;
+		}
+
+		function writeWeaponRow(data, rowIndex, offset) {
+			['ammunition','power','delay','probability'].forEach((field, fieldIndex) => {
+				const input = document.getElementById(`weapon-${rowIndex}-${field}`);
+				let value = input ? parseInt(input.value, 10) : 0;
+				if (Number.isNaN(value)) value = 0;
+				data.setUint8(offset + fieldIndex, value & 0xFF);
+			});
+		}
+
+		function downloadBuffer(buffer, filename) {
+			const blob = new Blob([buffer], { type: 'application/octet-stream' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(url);
+		}
+		</script>
+	</head>
+	<body>
+		<p><input type="file" id="input-file" accept=".wsc,application/octet-stream"></p>
+		<p><button id="save" disabled>Save</button></p>
+
+		<div id="message"></div>
+		<p>Game options</p>
+		<div id="game-options"></div>
+		<p>Weapons</p>
+		<div>
+			<table id="weapon-options">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Ammo</th>
+						<th>Power</th>
+						<th>Delay</th>
+						<th>Probability</th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+		</div>
+		<p>Super weapons</p>
+		<div>
+			<table id="super-weapon-options">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Ammo</th>
+						<th>Power</th>
+						<th>Delay</th>
+						<th>Probability</th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+		</div>
+	</body>
+</html>
